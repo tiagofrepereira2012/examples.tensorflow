@@ -1,0 +1,158 @@
+#!/usr/bin/env python
+# vim: set fileencoding=utf-8 :
+# @author: Tiago de Freitas Pereira <tiago.pereira@idiap.ch>
+# @date: Wed 11 May 2016 09:39:36 CEST 
+
+
+"""
+Simple script that trains MNIST with LENET using Tensor flow
+
+Usage:
+  train_mnist.py [--batch-size=<arg> --iterations=<arg> --validation-interval=<arg>]
+  train_mnist.py -h | --help
+Options:
+  -h --help     Show this screen.
+  --batch-size=<arg>  [default: 1]
+  --iterations=<arg>  [default: 30000]
+  --validation-interval=<arg>  [default: 100]
+"""
+
+from docopt import docopt
+import tensorflow as tf
+from .. import util
+from ..DataShuffler import *
+from ..lenet import Lenet
+
+SEED = 10
+from ..DataShuffler import *
+
+
+def compute_euclidean_distance(x, y):
+    """
+    Computes the euclidean distance between two tensorflow variables
+    """
+
+    d = tf.square(tf.sub(x, y))
+    d = tf.sqrt(tf.reduce_sum(d)) # What about the axis ???
+    return d
+
+
+def compute_contrastive_loss(left_feature, right_feature, label, margin):
+
+    """
+    Compute the contrastive loss as in
+
+    http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
+
+    L = 0.5 * (1 - Y) * D^2 + 0.5 * Y * {max(0, margin - D)}^2
+
+    **Parameters**
+     left_feature: First element of the pair
+     right_feature: Second element of the pair
+     label: Label of the pair (0 or 1)
+     margin: Contrastive margin
+
+    **Returns**
+     Return the loss operation
+
+    """
+
+    label = tf.to_float(label)
+    one = tf.constant(1.0)
+
+    d = compute_euclidean_distance(left_feature, right_feature)
+    first_part = tf.mul(label, tf.square(d))# Y*(d^2)
+
+    max_part = tf.square(tf.maximum(margin-d, 0))
+    second_part = tf.mul(one-label, max_part)  # (1-Y) * max(margin - d, 0)
+
+    loss = 0.5 * tf.reduce_sum(first_part + second_part)
+
+    return loss
+
+
+def evaluate(data, labels, session, network, data_node):
+    """
+    Evaluate the network using the validation set and compute the accuracy
+    """
+
+    predictions = session.run(
+        network,
+        feed_dict={data_node: data[:]}
+    )
+
+    return 100. * numpy.sum(numpy.argmax(predictions,1) == labels) / predictions.shape[0]
+
+
+def main():
+    args = docopt(__doc__, version='Mnist training with TensorFlow')
+
+    BATCH_SIZE = int(args['--batch-size'])
+    ITERATIONS = int(args['--iterations'])
+    VALIDATION_TEST = int(args['--validation-interval'])
+    perc_train = 0.9
+    CONTRASTIVE_MARGIN = 0.2
+
+    data, labels = util.load_mnist(data_dir="./src/bob.db.mnist/bob/db/mnist/")
+    data_shuffler = DataShuffler(data, labels)
+
+    # Siamease place holders
+    train_left_data = tf.placeholder(tf.float32, shape=(BATCH_SIZE*2, 28, 28, 1), name="left")
+    train_right_data = tf.placeholder(tf.float32, shape=(BATCH_SIZE * 2, 28, 28, 1), name="right")
+    labels_data = tf.placeholder(tf.int32, shape=BATCH_SIZE*2)
+
+    validation_data = tf.placeholder(tf.float32, shape=(data_shuffler.validation_data.shape[0], 28, 28, 1))
+
+    # Creating the architecture
+    lenet_architecture = Lenet(seed=SEED)
+    lenet_train_left = lenet_architecture.create_lenet(train_left_data)
+    lenet_train_right = lenet_architecture.create_lenet(train_right_data)
+    lenet_validation = lenet_architecture.create_lenet(validation_data, train=False)
+
+    # Defining the constrastive loss
+    left_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_left, labels_data))
+    right_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_right, labels_data))
+    loss = compute_contrastive_loss(left_output, right_output, labels_data, CONTRASTIVE_MARGIN)
+
+    #regularizer = (tf.nn.l2_loss(W_fc1) + tf.nn.l2_loss(b_fc1) +
+    #                tf.nn.l2_loss(W_fc2) + tf.nn.l2_loss(b_fc2))
+    #loss += 5e-4 * regularizer
+
+    # Defining training parameters
+    batch = tf.Variable(0)
+    learning_rate = tf.train.exponential_decay(
+        0.001, # Learning rate
+        batch * BATCH_SIZE,
+        data_shuffler.train_data.shape[0],
+        0.95 # Decay step
+    )
+
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
+    validation_prediction = tf.nn.softmax(lenet_validation)
+
+    print("Initializing")
+    # Training
+    with tf.Session() as session:
+
+        tf.initialize_all_variables().run()
+
+        for step in range(ITERATIONS):
+
+            batch_left, batch_right, labels = data_shuffler.get_pair(BATCH_SIZE)
+
+            feed_dict = {train_left_data: batch_left,
+                         train_right_data: batch_right,
+                         labels_data: labels}
+
+            _, l, lr = session.run([optimizer, loss, learning_rate],
+                                                feed_dict=feed_dict)
+
+            if step % VALIDATION_TEST == 0:
+                batch_validation_data, batch_validation_labels = data_shuffler.get_batch(data_shuffler.validation_data.shape[0],
+                                                                             train_dataset=False)
+                accuracy = evaluate(batch_validation_data, batch_validation_labels, session, validation_prediction,
+                                    validation_data)
+                print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
+
+        print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
+        print("End !!")
