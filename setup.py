@@ -76,6 +76,7 @@ setup(
       'console_scripts': [
         'train_mnist.py        = examples.tensorflow.script.train_mnist:main',
         'train_mnist_siamese.py = examples.tensorflow.script.train_mnist_siamese:main',
+        'train_mnist_triplet.py = examples.tensorflow.script.train_mnist_triplet:main',
       ],
 
 
