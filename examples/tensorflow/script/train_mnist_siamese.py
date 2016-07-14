@@ -70,20 +70,6 @@ def compute_contrastive_loss(left_feature, right_feature, label, margin):
 
     return loss
 
-
-def evaluate(data, labels, session, network, data_node):
-    """
-    Evaluate the network using the validation set and compute the accuracy
-    """
-
-    predictions = session.run(
-        network,
-        feed_dict={data_node: data[:]}
-    )
-
-    return 100. * numpy.sum(numpy.argmax(predictions,1) == labels) / predictions.shape[0]
-
-
 def main():
     args = docopt(__doc__, version='Mnist training with TensorFlow')
 
@@ -110,9 +96,9 @@ def main():
     lenet_validation = lenet_architecture.create_lenet(validation_data, train=False)
 
     # Defining the constrastive loss
-    left_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_left, labels_data))
-    right_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_right, labels_data))
-    loss = compute_contrastive_loss(left_output, right_output, labels_data, CONTRASTIVE_MARGIN)
+    #left_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_left, labels_data))
+    #right_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_right, labels_data))
+    loss = compute_contrastive_loss(lenet_train_left, lenet_train_right, labels_data, CONTRASTIVE_MARGIN)
 
     #regularizer = (tf.nn.l2_loss(W_fc1) + tf.nn.l2_loss(b_fc1) +
     #                tf.nn.l2_loss(W_fc2) + tf.nn.l2_loss(b_fc2))
@@ -150,9 +136,22 @@ def main():
             if step % VALIDATION_TEST == 0:
                 batch_validation_data, batch_validation_labels = data_shuffler.get_batch(data_shuffler.validation_data.shape[0],
                                                                              train_dataset=False)
-                accuracy = evaluate(batch_validation_data, batch_validation_labels, session, validation_prediction,
-                                    validation_data)
-                print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
 
-        print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
+                batch_train_data, batch_train_labels = data_shuffler.get_batch(
+                    data_shuffler.validation_data.shape[0],
+                    train_dataset=True)
+
+                accuracy_train = util.evaluate(batch_train_data, batch_train_labels, session,
+                                               validation_prediction,
+                                               validation_data)
+
+                accuracy_validation = util.evaluate(batch_validation_data, batch_validation_labels, session,
+                                                    validation_prediction, validation_data)
+
+                print("Step {0}. Loss = {1}, Lr={2}, Accuracy train = {3}, Accuracy validation = {4}".
+                      format(step, l, lr, accuracy_train, accuracy_validation))
+
+        print("Step {0}. Loss = {1}, Lr={2}, Accuracy train = {3}, Accuracy validation = {4}".
+              format(step, l, lr, accuracy_train, accuracy_validation))
+
         print("End !!")
