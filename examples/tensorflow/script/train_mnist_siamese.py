@@ -67,7 +67,6 @@ def compute_contrastive_loss(left_feature, right_feature, label, margin):
     d = compute_euclidean_distance(left_feature, right_feature)
     first_part = tf.mul(label, tf.square(d))# (Y)*(d^2)
 
-
     max_part = tf.square(tf.maximum(m-d, zero))
     second_part = tf.mul(one-label, max_part)  # (1-Y) * max(margin - d, 0)
     loss = half * tf.reduce_sum(first_part + second_part)
