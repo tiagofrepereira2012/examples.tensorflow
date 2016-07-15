@@ -41,20 +41,20 @@ class Lenet(object):
         # First convolutional
         with tf.device("/cpu"):
 
-            self.W_conv1 = create_weight_variables([conv1_kernel_size, conv1_kernel_size, 1, conv1_output], seed=seed)
+            self.W_conv1 = create_weight_variables([conv1_kernel_size, conv1_kernel_size, 1, conv1_output], seed=seed, name="W_conv1")
 
             self.b_conv1 = create_bias_variables([conv1_output])
 
             # Second convolutional
-            self.W_conv2 = create_weight_variables([conv2_kernel_size, conv2_kernel_size, conv1_output, conv2_output], seed=seed)
+            self.W_conv2 = create_weight_variables([conv2_kernel_size, conv2_kernel_size, conv1_output, conv2_output], seed=seed, name="W_conv2")
             self.b_conv2 = create_bias_variables([conv2_output])
 
             # First fc
-            self.W_fc1 = create_weight_variables([(28 // 4) * (28 // 4) * conv2_output, fc1_output], seed=seed)
+            self.W_fc1 = create_weight_variables([(28 // 4) * (28 // 4) * conv2_output, fc1_output], seed=seed, name="W_fc1")
             self.b_fc1 = create_bias_variables([fc1_output])
 
             # Second FC fc
-            self.W_fc2 = create_weight_variables([fc1_output, n_classes], seed=seed)
+            self.W_fc2 = create_weight_variables([fc1_output, n_classes], seed=seed, name="W_fc2")
             self.b_fc2 = create_bias_variables([n_classes])
 
         self.seed = seed

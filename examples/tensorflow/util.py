@@ -8,7 +8,7 @@ import tensorflow as tf
 numpy.random.seed(10)
 
 
-def create_weight_variables(shape, seed):
+def create_weight_variables(shape, seed, name):
     """
     Create gaussian random neurons with mean 0 and std 0.1
 
@@ -17,7 +17,17 @@ def create_weight_variables(shape, seed):
       shape: Shape of the layer
     """
 
-    initial = tf.truncated_normal(shape, stddev=0.1, seed=seed)
+    #import ipdb; ipdb.set_trace()
+
+    if len(shape) == 4:
+        in_out = shape[0] * shape[1] * shape[2] + shape[3]
+    else:
+        in_out = shape[0] + shape[1]
+
+    import math
+    stddev = math.sqrt(3.0 / in_out) # XAVIER INITIALIZER (GAUSSIAN)
+
+    initial = tf.truncated_normal(shape, stddev=stddev, seed=seed, name=name)
     return tf.Variable(initial)
 
 
@@ -228,4 +238,5 @@ def compute_eer(data_train, labels_train, data_validation, labels_validation, n_
     eer = (far + frr) / 2.
 
     return eer
+
 

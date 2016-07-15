@@ -67,6 +67,7 @@ def compute_contrastive_loss(left_feature, right_feature, label, margin):
     d = compute_euclidean_distance(left_feature, right_feature)
     first_part = tf.mul(label, tf.square(d))# (Y)*(d^2)
 
+
     max_part = tf.square(tf.maximum(m-d, zero))
     second_part = tf.mul(one-label, max_part)  # (1-Y) * max(margin - d, 0)
     loss = half * tf.reduce_sum(first_part + second_part)
@@ -103,8 +104,8 @@ def main():
     #right_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_right, labels_data))
     loss = compute_contrastive_loss(lenet_train_left, lenet_train_right, labels_data, CONTRASTIVE_MARGIN)
 
-    #regularizer = (tf.nn.l2_loss(W_fc1) + tf.nn.l2_loss(b_fc1) +
-    #                tf.nn.l2_loss(W_fc2) + tf.nn.l2_loss(b_fc2))
+    #regularizer = (tf.nn.l2_loss(lenet_architecture.W_fc1) + tf.nn.l2_loss(lenet_architecture.b_fc1) +
+    #                tf.nn.l2_loss(lenet_architecture.W_fc2) + tf.nn.l2_loss(lenet_architecture.b_fc2))
     #loss += 5e-4 * regularizer
 
     # Defining training parameters
@@ -157,7 +158,7 @@ def main():
                 print("Step {0}. Loss = {1}, Lr={2}, EER = {3}".
                       format(step, l, lr, eer))
 
-                fig = util.plot_embedding_lda(features_validation, batch_validation_labels)
+                fig = util.plot_embedding_pca(features_validation, batch_validation_labels)
 
                 pp.savefig(fig)
 
