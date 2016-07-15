@@ -83,9 +83,9 @@ def main():
                 validation_data, validation_labels = data_shuffler.get_batch(data_shuffler.validation_data.shape[0],
                                                                              train_dataset=False)
 
-                accuracy = util.evaluate(validation_data, validation_labels, session, validation_prediction, validation_data_node)
+                accuracy = util.evaluate_softmax(validation_data, validation_labels, session, validation_prediction, validation_data_node)
                 print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
     print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
 
 
-print("End !!")
+    print("End !!")

@@ -67,7 +67,8 @@ setup(
         'setuptools',
         'docopt',
         'ipython',
-        'bob.db.mnist'
+        'bob.db.mnist',
+        'tfdebugger'
     ],
 
     entry_points = {

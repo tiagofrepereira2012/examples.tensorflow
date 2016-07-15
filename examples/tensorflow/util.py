@@ -63,6 +63,19 @@ def create_relu(x, bias):
 
     return tf.nn.relu(tf.nn.bias_add(x, bias))
 
+def create_sigmoid(x, bias):
+    """
+    Create the Sigmoid activations
+
+    **Parameters**
+        x: input layer
+        bias: bias term
+
+    """
+
+    return tf.nn.sigmoid(tf.nn.bias_add(x, bias))
+
+
 
 def scale_mean_norm(data, scale=0.00390625):
     mean = numpy.mean(data)
@@ -71,10 +84,10 @@ def scale_mean_norm(data, scale=0.00390625):
     return data
 
 
-def evaluate(data, labels, session, network, data_node):
+def evaluate_softmax(data, labels, session, network, data_node):
 
     """
-    Evaluate the network using the validation set and compute the accuracy
+    Evaluate the network assuming that the output layer is a softmax
     """
 
     predictions = numpy.argmax(session.run(
@@ -82,7 +95,6 @@ def evaluate(data, labels, session, network, data_node):
         feed_dict={data_node: data[:]}), 1)
 
     return 100. * numpy.sum(predictions == labels) / predictions.shape[0]
-
 
 
 def load_mnist(data_dir="./src/bob.db.mnist/bob/db/mnist/"):
@@ -96,4 +108,124 @@ def load_mnist(data_dir="./src/bob.db.mnist/bob/db/mnist/"):
     labels = raw_data[1]
 
     return data, labels
+
+
+def plot_embedding_pca(features, labels):
+    """
+
+    Trains a PCA using bob, reducing the features to dimension 2 and plot it the possible clusters
+
+    :param features:
+    :param labels:
+    :return:
+    """
+
+    import bob.learn.linear
+    import matplotlib.pyplot as mpl
+
+    colors = ['#FF0000', '#FFFF00', '#FF00FF', '#00FFFF', '#000000',
+             '#AA0000', '#AAAA00', '#AA00AA', '#00AAAA', '#330000']
+
+    # Training PCA
+    trainer = bob.learn.linear.PCATrainer()
+    machine, lamb = trainer.train(features.astype("float64"))
+
+    # Getting the first two most relevant features
+    projected_features = machine(features.astype("float64"))[:, 0:2]
+
+    # Plotting the classes
+    n_classes = max(labels)+1
+    fig = mpl.figure()
+
+    for i in range(n_classes):
+        indexes = numpy.where(labels == i)[0]
+
+        selected_features = projected_features[indexes,:]
+        mpl.scatter(selected_features[:, 0], selected_features[:, 1],
+                 marker='.', c=colors[i], linewidths=0, label=str(i))
+    mpl.legend()
+    return fig
+
+def plot_embedding_lda(features, labels):
+    """
+
+    Trains a LDA using bob, reducing the features to dimension 2 and plot it the possible clusters
+
+    :param features:
+    :param labels:
+    :return:
+    """
+
+    import bob.learn.linear
+    import matplotlib.pyplot as mpl
+
+    colors = ['#FF0000', '#FFFF00', '#FF00FF', '#00FFFF', '#000000',
+             '#AA0000', '#AAAA00', '#AA00AA', '#00AAAA', '#330000']
+    n_classes = max(labels)+1
+
+
+    # Training PCA
+    trainer = bob.learn.linear.FisherLDATrainer(use_pinv=True)
+    lda_features = []
+    for i in range(n_classes):
+        indexes = numpy.where(labels == i)[0]
+        lda_features.append(features[indexes, :].astype("float64"))
+
+    machine, lamb = trainer.train(lda_features)
+
+    #import ipdb; ipdb.set_trace();
+
+
+    # Getting the first two most relevant features
+    projected_features = machine(features.astype("float64"))[:, 0:2]
+
+    # Plotting the classes
+    fig = mpl.figure()
+
+    for i in range(n_classes):
+        indexes = numpy.where(labels == i)[0]
+
+        selected_features = projected_features[indexes,:]
+        mpl.scatter(selected_features[:, 0], selected_features[:, 1],
+                 marker='.', c=colors[i], linewidths=0, label=str(i))
+    mpl.legend()
+    return fig
+
+
+def compute_eer(data_train, labels_train, data_validation, labels_validation, n_classes):
+    import bob.measure
+    from scipy.spatial.distance import cosine
+
+    # Creating client models
+    models = []
+    for i in range(n_classes):
+        indexes = labels_train == i
+        models.append(numpy.mean(data_train[indexes, :], axis=0))
+
+    # Probing
+    positive_scores = numpy.zeros(shape=0)
+    negative_scores = numpy.zeros(shape=0)
+
+    for i in range(n_classes):
+        # Positive scoring
+        indexes = labels_validation == i
+        positive_data = data_validation[indexes, :]
+        p = [cosine(models[i], positive_data[j]) for j in range(positive_data.shape[0])]
+        positive_scores = numpy.hstack((positive_scores, p))
+
+        # negative scoring
+        indexes = labels_validation != i
+        negative_data = data_validation[indexes, :]
+        n = [cosine(models[i], negative_data[j]) for j in range(negative_data.shape[0])]
+        negative_scores = numpy.hstack((negative_scores, n))
+
+    # Computing performance based on EER
+    negative_scores = (-1) * negative_scores
+    positive_scores = (-1) * positive_scores
+
+    threshold = bob.measure.eer_threshold(negative_scores, positive_scores)
+    far, frr = bob.measure.farfrr(negative_scores, positive_scores, threshold)
+    eer = (far + frr) / 2.
+
+    return eer
 

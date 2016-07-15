@@ -42,8 +42,7 @@ def compute_triplet_loss(anchor_feature, positive_feature, negative_feature, mar
     Compute the contrastive loss as in
 
 
-
-    L = || f_a - f_p ||^2 - || f_a - f_p ||^2 + m
+    L = || f_a - f_p ||^2 - || f_a - f_n ||^2 + m
 
     **Parameters**
      anchor_feature:

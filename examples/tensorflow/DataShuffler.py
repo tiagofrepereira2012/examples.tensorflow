@@ -48,7 +48,7 @@ class DataShuffler(object):
         if scale:
             # data = scale_minmax_norm(data,lower_bound = -1, upper_bound = 1)
             self.train_data, self.mean = scale_mean_norm(self.train_data)
-            self.mean = (self.validation_data - self.mean) * scale_value
+            self.validation_data = (self.validation_data - self.mean) * scale_value
 
     def get_batch(self, n_samples, train_dataset=True):
 
