@@ -73,6 +73,7 @@ def create_relu(x, bias):
 
     return tf.nn.relu(tf.nn.bias_add(x, bias))
 
+
 def create_sigmoid(x, bias):
     """
     Create the Sigmoid activations
@@ -84,7 +85,6 @@ def create_sigmoid(x, bias):
     """
 
     return tf.nn.sigmoid(tf.nn.bias_add(x, bias))
-
 
 
 def scale_mean_norm(data, scale=0.00390625):
@@ -240,3 +240,26 @@ def compute_eer(data_train, labels_train, data_validation, labels_validation, n_
     return eer
 
 
+def compute_accuracy(data_train, labels_train, data_validation, labels_validation, n_classes):
+    from scipy.spatial.distance import cosine
+
+    # Creating client models
+    models = []
+    for i in range(n_classes):
+        indexes = labels_train == i
+        models.append(numpy.mean(data_train[indexes, :], axis=0))
+
+    # Probing
+    tp = 0
+    for i in range(data_validation.shape[0]):
+
+        d = data_validation[i,:]
+        l = labels_validation[i]
+
+        scores = [cosine(m, d) for m in models]
+        predict = numpy.argmax(scores)
+
+        if predict == l:
+            tp += 1
+
+    return (float(tp) / data_validation.shape[0]) * 100

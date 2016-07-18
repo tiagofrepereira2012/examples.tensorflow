@@ -33,8 +33,9 @@ def compute_euclidean_distance(x, y):
     Computes the euclidean distance between two tensorflow variables
     """
 
-    d = tf.square(tf.sub(x, y))
-    d = tf.sqrt(tf.reduce_sum(d)) # What about the axis ???
+    #d = tf.square(tf.sub(x, y))
+    #d = tf.sqrt(tf.reduce_sum(d)) # What about the axis ???
+    d = tf.sqrt(tf.reduce_sum(tf.square(tf.sub(x, y)), 1))
     return d
 
 
@@ -58,20 +59,41 @@ def compute_contrastive_loss(left_feature, right_feature, label, margin):
 
     """
 
+    #label = tf.to_float(label)
+    #one = tf.constant(1.0)
+    #zero = tf.constant(0.0)
+    #half = tf.constant(0.5)
+    #m = tf.constant(margin)
+
+    #d = compute_euclidean_distance(left_feature, right_feature)
+    #first_part = tf.mul(label, tf.square(d))# (Y)*(d^2)
+
+    #max_part = tf.square(tf.maximum(m-d, zero))
+    #second_part = tf.mul(one-label, max_part)  # (1-Y) * max(margin - d, 0)
+    #loss = half * tf.reduce_sum(first_part + second_part)
+
+    #return loss
+
+
+    # Stack overflow "fix"
+
     label = tf.to_float(label)
     one = tf.constant(1.0)
-    zero = tf.constant(0.0)
-    half = tf.constant(0.5)
-    m = tf.constant(margin)
 
     d = compute_euclidean_distance(left_feature, right_feature)
-    first_part = tf.mul(label, tf.square(d))# (Y)*(d^2)
+    first_part = tf.mul(one - label, tf.square(d))  # (Y-1)*(d^2)
 
-    max_part = tf.square(tf.maximum(m-d, zero))
-    second_part = tf.mul(one-label, max_part)  # (1-Y) * max(margin - d, 0)
-    loss = half * tf.reduce_sum(first_part + second_part)
+    max_part = tf.square(tf.maximum(margin - d, 0))
+    second_part = tf.mul(label, max_part)  # (Y) * max((margin - d)^2, 0)
+
+    loss = 0.5 * tf.reduce_mean(first_part + second_part)
 
     return loss
+
+
+
+
+
 
 def main():
     args = docopt(__doc__, version='Mnist training with TensorFlow')
@@ -110,7 +132,7 @@ def main():
     # Defining training parameters
     batch = tf.Variable(0)
     learning_rate = tf.train.exponential_decay(
-        0.001, # Learning rate
+        0.01, # Learning rate
         batch * BATCH_SIZE,
         data_shuffler.train_data.shape[0],
         0.95 # Decay step
@@ -152,12 +174,15 @@ def main():
                 features_validation = session.run(lenet_validation,
                                        feed_dict={validation_data: batch_validation_data[:]})
 
-                eer = util.compute_eer(features_train, batch_train_labels, features_validation, batch_validation_labels, 10)
+                #eer = util.compute_eer(features_train, batch_train_labels, features_validation, batch_validation_labels, 10)
+                #print("Step {0}. Loss = {1}, Lr={2}, EER = {3}".
+                #      format(step, l, lr, eer))
 
-                print("Step {0}. Loss = {1}, Lr={2}, EER = {3}".
-                      format(step, l, lr, eer))
+                accuracy = util.compute_accuracy(features_train, batch_train_labels, features_validation, batch_validation_labels, 10)
+                print("Step {0}. Loss = {1}, Lr={2}, Acc = {3}".
+                      format(step, l, lr, accuracy))
 
-                fig = util.plot_embedding_pca(features_validation, batch_validation_labels)
+                fig = util.plot_embedding_lda(features_validation, batch_validation_labels)
 
                 pp.savefig(fig)
 

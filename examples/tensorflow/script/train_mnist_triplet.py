@@ -21,6 +21,7 @@ from docopt import docopt
 import tensorflow as tf
 from .. import util
 from ..DataShuffler import DataShuffler
+from matplotlib.backends.backend_pdf import PdfPages
 from ..lenet import Lenet
 
 SEED = 10
@@ -58,9 +59,9 @@ def compute_triplet_loss(anchor_feature, positive_feature, negative_feature, mar
     d_p_squared = tf.square(compute_euclidean_distance(anchor_feature, positive_feature))
     d_n_squared = tf.square(compute_euclidean_distance(anchor_feature, negative_feature))
 
-    loss = d_p_squared - d_n_squared + margin
+    loss = tf.maximum(0., d_p_squared - d_n_squared + margin)
 
-    return loss
+    return tf.reduce_mean(loss)
 
 
 def main():
@@ -120,7 +121,7 @@ def main():
     with tf.Session() as session:
 
         tf.initialize_all_variables().run()
-
+        pp = PdfPages("groups.pdf")
         for step in range(ITERATIONS):
 
             batch_anchor, batch_positive, batch_negative, \
@@ -138,11 +139,28 @@ def main():
                                                 feed_dict=feed_dict)
 
             if step % VALIDATION_TEST == 0:
-                batch_validation_data, batch_validation_labels = data_shuffler.get_batch(data_shuffler.validation_data.shape[0],
-                                                                             train_dataset=False)
-                accuracy = util.evaluate(batch_validation_data, batch_validation_labels, session, validation_prediction,
-                                    validation_data)
-                print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
+                batch_train_data, batch_train_labels = data_shuffler.get_batch(
+                    data_shuffler.validation_data.shape[0],
+                    train_dataset=True)
 
-        print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
+                features_train = session.run(lenet_validation,
+                                       feed_dict={validation_data: batch_train_data[:]})
+
+                batch_validation_data, batch_validation_labels = data_shuffler.get_batch(data_shuffler.validation_data.shape[0],
+                                                                                         train_dataset=False)
+
+                features_validation = session.run(lenet_validation,
+                                       feed_dict={validation_data: batch_validation_data[:]})
+
+                accuracy = util.compute_accuracy(features_train, batch_train_labels, features_validation, batch_validation_labels, 10)
+                print("Step {0}. Loss = {1}, Lr={2}, Acc = {3}".
+                      format(step, l, lr, accuracy))
+
+                fig = util.plot_embedding_lda(features_validation, batch_validation_labels)
+
+                pp.savefig(fig)
+
+        print("Step {0}. Loss = {1}, Lr={2}, Acc = {3}".
+              format(step, l, lr, accuracy))
         print("End !!")
+        pp.close()
