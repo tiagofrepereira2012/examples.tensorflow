@@ -201,6 +201,10 @@ def main():
         #print("EER = {0}".format(eer))
         #print("Step {0}. Loss = {1}, Lr={2}, Accuracy train = {3}, Accuracy validation = {4}".
         #      format(step, l, lr, accuracy_train, accuracy_validation))
+
+        print("Step {0}. Loss = {1}, Lr={2}, Acc = {3}".
+              format(step, l, lr, accuracy))
+
         pp.close()
         print("End !!")
 
