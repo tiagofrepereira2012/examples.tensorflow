@@ -34,7 +34,7 @@ class DataShuffler(object):
         numpy.random.shuffle(indexes)
 
         # Spliting train and validation
-        train_samples = round(total_samples * perc_train)
+        train_samples = int(round(total_samples * perc_train))
         validation_samples = total_samples - train_samples
         data = numpy.reshape(data, (data.shape[0], 28, 28, 1))
 

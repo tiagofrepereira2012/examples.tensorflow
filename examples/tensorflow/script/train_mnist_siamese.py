@@ -8,7 +8,7 @@
 Simple script that trains MNIST with LENET using Tensor flow
 
 Usage:
-  train_mnist.py [--batch-size=<arg> --iterations=<arg> --validation-interval=<arg>]
+  train_mnist.py [--batch-size=<arg> --iterations=<arg> --validation-interval=<arg> --use-gpu]
   train_mnist.py -h | --help
 Options:
   -h --help     Show this screen.
@@ -23,6 +23,7 @@ from .. import util
 from ..DataShuffler import *
 from ..lenet import Lenet
 from matplotlib.backends.backend_pdf import PdfPages
+import sys
 
 SEED = 10
 from ..DataShuffler import *
@@ -91,10 +92,6 @@ def compute_contrastive_loss(left_feature, right_feature, label, margin):
     return loss
 
 
-
-
-
-
 def main():
     args = docopt(__doc__, version='Mnist training with TensorFlow')
 
@@ -102,10 +99,18 @@ def main():
     ITERATIONS = int(args['--iterations'])
     VALIDATION_TEST = int(args['--validation-interval'])
     perc_train = 0.9
-    CONTRASTIVE_MARGIN = 0.2
+    CONTRASTIVE_MARGIN = 0.1
+    USE_GPU = args['--use-gpu']
+
+
+    print("Load data")
+    sys.stdout.flush()
 
     data, labels = util.load_mnist(data_dir="./src/bob.db.mnist/bob/db/mnist/")
     data_shuffler = DataShuffler(data, labels, scale=True)
+
+    print("A")
+    sys.stdout.flush()
 
     # Siamease place holders
     train_left_data = tf.placeholder(tf.float32, shape=(BATCH_SIZE*2, 28, 28, 1), name="left")
@@ -114,16 +119,28 @@ def main():
 
     validation_data = tf.placeholder(tf.float32, shape=(data_shuffler.validation_data.shape[0], 28, 28, 1))
 
+    print("B")
+    sys.stdout.flush()
+
+
     # Creating the architecture
-    lenet_architecture = Lenet(seed=SEED)
+    lenet_architecture = Lenet(seed=SEED, use_gpu=USE_GPU)
     lenet_train_left = lenet_architecture.create_lenet(train_left_data)
     lenet_train_right = lenet_architecture.create_lenet(train_right_data)
     lenet_validation = lenet_architecture.create_lenet(validation_data, train=False)
 
+    print("C")
+    sys.stdout.flush()
+
+
     # Defining the constrastive loss
     #left_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_left, labels_data))
     #right_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_right, labels_data))
-    loss = compute_contrastive_loss(lenet_train_left, lenet_train_right, labels_data, CONTRASTIVE_MARGIN)
+    loss = compute_contrastive_loss(tf.nn.softmax(lenet_train_left), tf.nn.softmax(lenet_train_right), labels_data, CONTRASTIVE_MARGIN)
+
+    print("D")
+    sys.stdout.flush()
+
 
     #regularizer = (tf.nn.l2_loss(lenet_architecture.W_fc1) + tf.nn.l2_loss(lenet_architecture.b_fc1) +
     #                tf.nn.l2_loss(lenet_architecture.W_fc2) + tf.nn.l2_loss(lenet_architecture.b_fc2))
@@ -132,32 +149,57 @@ def main():
     # Defining training parameters
     batch = tf.Variable(0)
     learning_rate = tf.train.exponential_decay(
-        0.01, # Learning rate
+        0.001, # Learning rate
         batch * BATCH_SIZE,
         data_shuffler.train_data.shape[0],
         0.95 # Decay step
     )
 
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
+    print("E")
+    sys.stdout.flush()
+
+
+    #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
+    optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=0.99, use_locking=False, name='Momentum').minimize(loss, global_step=batch)
     #validation_prediction = tf.nn.softmax(lenet_validation)
 
     print("Initializing")
+    sys.stdout.flush()
+
     # Training
 
     with tf.Session() as session:
 
+        print("INITIALIZE ALL VARIABLES")
+        sys.stdout.flush()
+
         tf.initialize_all_variables().run()
 
-        pp = PdfPages("groups.pdf")
+        print("INITIALIZE ALL VARIABLES - OK")
+        sys.stdout.flush()
+
+
+        #pp = PdfPages("groups.pdf")
         for step in range(ITERATIONS):
 
             batch_left, batch_right, labels = data_shuffler.get_pair(BATCH_SIZE)
+
+            print("FEED DICT")
+            sys.stdout.flush()
 
             feed_dict = {train_left_data: batch_left,
                          train_right_data: batch_right,
                          labels_data: labels}
 
+            print("Run")
+            sys.stdout.flush()
+
+
             _, l, lr = session.run([optimizer, loss, learning_rate], feed_dict=feed_dict)
+
+            print("Ok")
+            sys.stdout.flush()
+
 
             if step % VALIDATION_TEST == 0:
 
@@ -181,10 +223,12 @@ def main():
                 accuracy = util.compute_accuracy(features_train, batch_train_labels, features_validation, batch_validation_labels, 10)
                 print("Step {0}. Loss = {1}, Lr={2}, Acc = {3}".
                       format(step, l, lr, accuracy))
+                      
+                sys.stdout.flush()
 
-                fig = util.plot_embedding_lda(features_validation, batch_validation_labels)
+                #fig = util.plot_embedding_lda(features_validation, batch_validation_labels)
 
-                pp.savefig(fig)
+                #pp.savefig(fig)
 
 
 
@@ -205,7 +249,7 @@ def main():
         print("Step {0}. Loss = {1}, Lr={2}, Acc = {3}".
               format(step, l, lr, accuracy))
 
-        pp.close()
+        #pp.close()
         print("End !!")
 
 

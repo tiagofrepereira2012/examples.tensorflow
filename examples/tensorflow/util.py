@@ -8,7 +8,7 @@ import tensorflow as tf
 numpy.random.seed(10)
 
 
-def create_weight_variables(shape, seed, name):
+def create_weight_variables(shape, seed, name, use_gpu=False):
     """
     Create gaussian random neurons with mean 0 and std 0.1
 
@@ -27,16 +27,31 @@ def create_weight_variables(shape, seed, name):
     import math
     stddev = math.sqrt(3.0 / in_out) # XAVIER INITIALIZER (GAUSSIAN)
 
-    initial = tf.truncated_normal(shape, stddev=stddev, seed=seed, name=name)
-    return tf.Variable(initial)
+    initializer = tf.truncated_normal(shape, stddev=stddev, seed=seed)
+    
+    if use_gpu:
+        with tf.device("/gpu"):
+            return tf.get_variable(name, initializer=initializer, dtype=tf.float32)
+    else:
+        with tf.device("/cpu"):
+            return tf.get_variable(name, initializer=initializer, dtype=tf.float32)
 
 
-def create_bias_variables(shape):
+def create_bias_variables(shape, name, use_gpu=False):
     """
     Create the bias term
     """
-    initial = tf.constant(0.1, shape=shape)
-    return tf.Variable(initial)
+    initializer = tf.constant(0.1, shape=shape)
+    
+    if use_gpu:
+        with tf.device("/gpu"):
+            return tf.get_variable(name, initializer=initializer, dtype=tf.float32)
+    else:
+        with tf.device("/cpu"):
+            return tf.get_variable(name, initializer=initializer, dtype=tf.float32)
+    
+    
+   
 
 
 def create_conv2d(x, W):

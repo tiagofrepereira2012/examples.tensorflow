@@ -8,13 +8,13 @@
 Simple script that trains MNIST with LENET using Tensor flow
 
 Usage:
-  train_mnist.py [--batch-size=<arg> --iterations=<arg> --validation-interval=<arg>]
+  train_mnist.py [--batch-size=<arg> --iterations=<arg> --validation-interval=<arg> --use-gpu]
   train_mnist.py -h | --help
 Options:
   -h --help     Show this screen.
   --batch-size=<arg>  [default: 1]
   --iterations=<arg>  [default: 30000]
-  --validation-interval=<arg>  [default: 100]
+  --validation-interval=<arg>  [default: 100]  
 """
 
 from docopt import docopt
@@ -23,7 +23,7 @@ from .. import util
 SEED = 10
 from ..DataShuffler import *
 from ..lenet import Lenet
-
+import sys
 
 def main():
     args = docopt(__doc__, version='Mnist training with TensorFlow')
@@ -31,6 +31,7 @@ def main():
     BATCH_SIZE = int(args['--batch-size'])
     ITERATIONS = int(args['--iterations'])
     VALIDATION_TEST = int(args['--validation-interval'])
+    USE_GPU = args['--use-gpu']
     perc_train = 0.9
 
     # Loading data
@@ -43,7 +44,7 @@ def main():
     validation_data_node = tf.placeholder(tf.float32, shape=(data_shuffler.validation_data.shape[0], 28, 28, 1))
 
     # Creating the architecture for train and validation
-    lenet_architecture = Lenet(seed=SEED)
+    lenet_architecture = Lenet(seed=SEED, use_gpu=USE_GPU)
     lenet_train = lenet_architecture.create_lenet(train_data_node)
     lenet_validation = lenet_architecture.create_lenet(validation_data_node, train=False)
 
@@ -85,6 +86,8 @@ def main():
 
                 accuracy = util.evaluate_softmax(validation_data, validation_labels, session, validation_prediction, validation_data_node)
                 print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
+                sys.stdout.flush()
+                
     print("Step {0}. Loss = {1}, Lr={2}, Accuracy validation = {3}".format(step, l, lr, accuracy))
 
 

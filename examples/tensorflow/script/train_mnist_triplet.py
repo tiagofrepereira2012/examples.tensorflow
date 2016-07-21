@@ -94,11 +94,11 @@ def main():
     lenet_validation = lenet_architecture.create_lenet(validation_data, train=False)
 
     # Defining the triplet loss
-    anchor_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_anchor, labels_anchor))
-    positive_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_positive, labels_positive))
-    negative_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_negative, labels_negative))
+    #anchor_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_anchor, labels_anchor))
+    #positive_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_positive, labels_positive))
+    #negative_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_negative, labels_negative))
 
-    loss = compute_triplet_loss(anchor_output, positive_output, negative_output, MARGIN)
+    loss = compute_triplet_loss(lenet_train_anchor, lenet_train_positive, lenet_train_negative, MARGIN)
 
     #regularizer = (tf.nn.l2_loss(W_fc1) + tf.nn.l2_loss(b_fc1) +
     #                tf.nn.l2_loss(W_fc2) + tf.nn.l2_loss(b_fc2))
@@ -125,7 +125,8 @@ def main():
         for step in range(ITERATIONS):
 
             batch_anchor, batch_positive, batch_negative, \
-            batch_labels_anchor, batch_labels_positive, batch_labels_negative = data_shuffler.get_triplet(n_labels=10)
+            batch_labels_anchor, batch_labels_positive, batch_labels_negative = \
+                data_shuffler.get_triplet(n_labels=10, n_triplets=BATCH_SIZE)
 
             feed_dict = {train_anchor_data: batch_anchor,
                          train_positive_data: batch_positive,
