@@ -24,6 +24,7 @@ from ..DataShuffler import *
 from ..lenet import Lenet
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
+import bob.measure
 
 SEED = 10
 from ..DataShuffler import *
@@ -103,43 +104,50 @@ def main():
     USE_GPU = args['--use-gpu']
 
 
-    print("Load data")
-    sys.stdout.flush()
+    #print("Load data")
+    #sys.stdout.flush()
 
     data, labels = util.load_mnist(data_dir="./src/bob.db.mnist/bob/db/mnist/")
     data_shuffler = DataShuffler(data, labels, scale=True)
 
-    print("A")
-    sys.stdout.flush()
+    #print("A")
+    #sys.stdout.flush()
 
-    # Siamease place holders
+    # Creating the variables
+    lenet_architecture = Lenet(seed=SEED, use_gpu=USE_GPU)
+
+    # Siamease place holders - Training
     train_left_data = tf.placeholder(tf.float32, shape=(BATCH_SIZE*2, 28, 28, 1), name="left")
     train_right_data = tf.placeholder(tf.float32, shape=(BATCH_SIZE * 2, 28, 28, 1), name="right")
-    labels_data = tf.placeholder(tf.int32, shape=BATCH_SIZE*2)
+    labels_data = tf.placeholder(tf.int32, shape=BATCH_SIZE * 2)
 
-    validation_data = tf.placeholder(tf.float32, shape=(data_shuffler.validation_data.shape[0], 28, 28, 1))
-
-    print("B")
-    sys.stdout.flush()
-
-
-    # Creating the architecture
-    lenet_architecture = Lenet(seed=SEED, use_gpu=USE_GPU)
+    # Creating the graphs for training
     lenet_train_left = lenet_architecture.create_lenet(train_left_data)
     lenet_train_right = lenet_architecture.create_lenet(train_right_data)
-    lenet_validation = lenet_architecture.create_lenet(validation_data, train=False)
+    #lenet_validation = lenet_architecture.create_lenet(validation_data, train=False)
 
-    print("C")
-    sys.stdout.flush()
+
+    # Siamease place holders - Validation
+    validation_left_data = tf.placeholder(tf.float32, shape=(300 * 2, 28, 28, 1), name="left")
+    validation_right_data = tf.placeholder(tf.float32, shape=(300 * 2, 28, 28, 1), name="right")
+    labels_data_validation = tf.placeholder(tf.int32, shape=300 * 2)
+
+    # Creating the graphs for Validation
+    lenet_validation_left = lenet_architecture.create_lenet(validation_left_data)
+    lenet_validation_right = lenet_architecture.create_lenet(validation_right_data)
+    #lenet_validation = lenet_architecture.create_lenet(validation_data, train=False)
 
 
     # Defining the constrastive loss
     #left_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_left, labels_data))
     #right_output = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(lenet_train_right, labels_data))
-    loss = compute_contrastive_loss(tf.nn.softmax(lenet_train_left), tf.nn.softmax(lenet_train_right), labels_data, CONTRASTIVE_MARGIN)
+    #loss = compute_contrastive_loss(tf.nn.softmax(lenet_train_left), tf.nn.softmax(lenet_train_right), labels_data, CONTRASTIVE_MARGIN)
 
-    print("D")
-    sys.stdout.flush()
+    loss = compute_contrastive_loss(lenet_train_left, lenet_train_right, labels_data, CONTRASTIVE_MARGIN)
+    loss_validation = compute_euclidean_distance(lenet_validation_left, lenet_validation_right)
+
+    #print("D")
+    #sys.stdout.flush()
 
 
     #regularizer = (tf.nn.l2_loss(lenet_architecture.W_fc1) + tf.nn.l2_loss(lenet_architecture.b_fc1) +
@@ -149,34 +157,34 @@ def main():
     # Defining training parameters
     batch = tf.Variable(0)
     learning_rate = tf.train.exponential_decay(
-        0.001, # Learning rate
+        0.00001, # Learning rate
         batch * BATCH_SIZE,
         data_shuffler.train_data.shape[0],
         0.95 # Decay step
     )
 
-    print("E")
-    sys.stdout.flush()
+    #print("E")
+    #sys.stdout.flush()
 
 
     #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
     optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=0.99, use_locking=False, name='Momentum').minimize(loss, global_step=batch)
     #validation_prediction = tf.nn.softmax(lenet_validation)
 
-    print("Initializing")
-    sys.stdout.flush()
+    #print("Initializing")
+    #sys.stdout.flush()
 
     # Training
 
     with tf.Session() as session:
 
-        print("INITIALIZE ALL VARIABLES")
-        sys.stdout.flush()
+        #print("INITIALIZE ALL VARIABLES")
+        #sys.stdout.flush()
 
         tf.initialize_all_variables().run()
 
-        print("INITIALIZE ALL VARIABLES - OK")
-        sys.stdout.flush()
+        #print("INITIALIZE ALL VARIABLES - OK")
+        #sys.stdout.flush()
 
 
         #pp = PdfPages("groups.pdf")
@@ -184,70 +192,48 @@ def main():
 
             batch_left, batch_right, labels = data_shuffler.get_pair(BATCH_SIZE)
 
-            print("FEED DICT")
-            sys.stdout.flush()
+            #print("FEED DICT")
+            #sys.stdout.flush()
 
             feed_dict = {train_left_data: batch_left,
                          train_right_data: batch_right,
                          labels_data: labels}
 
-            print("Run")
-            sys.stdout.flush()
-
+            #print("Run")
+            #sys.stdout.flush()
 
             _, l, lr = session.run([optimizer, loss, learning_rate], feed_dict=feed_dict)
 
-            print("Ok")
-            sys.stdout.flush()
-
+            #print("Ok")
+            #sys.stdout.flush()
 
             if step % VALIDATION_TEST == 0:
 
-                batch_train_data, batch_train_labels = data_shuffler.get_batch(
-                    data_shuffler.validation_data.shape[0],
-                    train_dataset=True)
+                batch_left, batch_right, labels = data_shuffler.get_pair(n_pair=300,
+                                                                         is_target_set_train=True)
+                feed_dict = {validation_left_data: batch_left,
+                             validation_right_data: batch_right,
+                             labels_data_validation: labels}
 
-                features_train = session.run(lenet_validation,
-                                       feed_dict={validation_data: batch_train_data[:]})
-
-                batch_validation_data, batch_validation_labels = data_shuffler.get_batch(data_shuffler.validation_data.shape[0],
-                                                                                         train_dataset=False)
-
-                features_validation = session.run(lenet_validation,
-                                       feed_dict={validation_data: batch_validation_data[:]})
-
-                #eer = util.compute_eer(features_train, batch_train_labels, features_validation, batch_validation_labels, 10)
-                #print("Step {0}. Loss = {1}, Lr={2}, EER = {3}".
-                #      format(step, l, lr, eer))
-
-                accuracy = util.compute_accuracy(features_train, batch_train_labels, features_validation, batch_validation_labels, 10)
-                print("Step {0}. Loss = {1}, Lr={2}, Acc = {3}".
-                      format(step, l, lr, accuracy))
-                      
-                sys.stdout.flush()
-
-                #fig = util.plot_embedding_lda(features_validation, batch_validation_labels)
-
-                #pp.savefig(fig)
+                import ipdb; ipdb.set_trace();
+                distances = session.run([loss_validation], feed_dict=feed_dict)
 
 
+                positive_scores = distances[0][numpy.where(labels == 1)[0]].astype("float")
+                negative_scores = distances[0][numpy.where(labels == 0)[0]].astype("float")
+                threshold = bob.measure.eer_threshold(negative_scores, positive_scores)
+                far, frr = bob.measure.farfrr(negative_scores, positive_scores, threshold)
+                eer = ((far + frr) / 2.) * 100.
+                print("EER = {0}".format(eer))
+                #import ipdb; ipdb.set_trace();
 
-                #accuracy_train = util.evaluate_softmax(batch_train_data, batch_train_labels, session,
-                #                               tf.nn.softmax(lenet_validation),
-                #                               validation_data)
-
-                #accuracy_validation = util.evaluate_softmax(batch_validation_data, batch_validation_labels, session,
-                #                                    tf.nn.softmax(lenet_validation), validation_data)
-                #
-                #print("Step {0}. Loss = {1}, Lr={2}, Accuracy train = {3}, Accuracy validation = {4}".
-                #      format(step, l, lr, accuracy_train, accuracy_validation))
 
         #print("EER = {0}".format(eer))
         #print("Step {0}. Loss = {1}, Lr={2}, Accuracy train = {3}, Accuracy validation = {4}".
         #      format(step, l, lr, accuracy_train, accuracy_validation))
 
-        print("Step {0}. Loss = {1}, Lr={2}, Acc = {3}".
-              format(step, l, lr, accuracy))
+        #print("Step {0}. Loss = {1}, Lr={2}, Acc = {3}".
+        #      format(step, l, lr, accuracy))
 
         #pp.close()
         print("End !!")
