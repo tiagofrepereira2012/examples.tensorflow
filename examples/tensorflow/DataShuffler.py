@@ -68,7 +68,7 @@ class DataShuffler(object):
 
         return selected_data.astype("float32"), selected_labels
 
-    def get_pair(self, n_pair=1, is_target_set_train=True):
+    def get_pair(self, n_pair=1, is_target_set_train=True, zero_one_labels=True):
         """
         Get a random pair of samples
 
@@ -129,7 +129,10 @@ class DataShuffler(object):
         genuine = True
         for i in range(total_data):
             data[i, :, :, :], data_p[i, :, :, :] = get_genuine_or_not(target_data, target_labels, genuine=genuine)
-            labels_siamese[i] = genuine
+            if zero_one_labels:
+                labels_siamese[i] = genuine
+            else:
+                labels_siamese[i] = 1 if genuine else -1
             genuine = not genuine
 
         return data, data_p, labels_siamese
