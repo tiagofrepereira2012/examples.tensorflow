@@ -76,6 +76,19 @@ def create_max_pool(x):
     return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
 
+def create_tanh(x, bias):
+    """
+    Create the Tanh activations
+
+    **Parameters**
+        x: input layer
+        bias: bias term
+
+    """
+
+    return tf.nn.tanh(tf.nn.bias_add(x, bias))
+
+
 def create_relu(x, bias):
     """
     Create the ReLU activations

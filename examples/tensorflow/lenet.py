@@ -14,10 +14,10 @@ class Lenet(object):
 
     def __init__(self,
                  conv1_kernel_size=5,
-                 conv1_output=32,
+                 conv1_output=16,
 
                  conv2_kernel_size=5,
-                 conv2_output=64,
+                 conv2_output=32,
 
                  fc1_output=400,
                  n_classes=10,
@@ -78,30 +78,33 @@ class Lenet(object):
         # relu1 = create_relu(conv1, self.b_conv1)
         # relu1 = create_sigmoid(conv1, self.b_conv1)
 
+        with tf.name_scope('tanh_1') as scope:
+            tanh_1 = create_tanh(conv1, self.b_conv1)
+
+
         # Pooling
         # pool1 = create_max_pool(relu1)
         # pool1 = create_max_pool(relu1)
         with tf.name_scope('pool_1') as scope:
-            pool1 = create_max_pool(conv1)
-
-        with tf.name_scope('relu_1') as scope:
-            relu1 = create_relu(pool1, self.b_conv1)
+            pool1 = create_max_pool(tanh_1)
 
 
         # Second convolutional
         with tf.name_scope('conv_2') as scope:
-            conv2 = create_conv2d(relu1, self.W_conv2)
+            conv2 = create_conv2d(pool1, self.W_conv2)
         # relu2 = create_relu(conv2, self.b_conv2)
         # relu2 = create_sigmoid(conv2, self.b_conv2)
 
+
+        with tf.name_scope('tanh_2') as scope:
+            # pool2 = create_max_pool(relu2)
+            tanh_2 = create_relu(conv2, self.b_conv2)
+            # pool2 = create_max_pool(conv2)
+
         # Pooling
         with tf.name_scope('pool_2') as scope:
-            pool2 = create_max_pool(conv2)
+            pool2 = create_max_pool(tanh_2)
 
-        with tf.name_scope('relu_2') as scope:
-            # pool2 = create_max_pool(relu2)
-            relu2 = create_relu(pool2, self.b_conv2)
-            # pool2 = create_max_pool(conv2)
 
         #if train:
             #pool2 = tf.nn.dropout(pool2, 0.5, seed=self.seed)
@@ -109,9 +112,10 @@ class Lenet(object):
         # Reshaping all the convolved images to 2D to feed the FC layers
         # FC1
         with tf.name_scope('fc_1') as scope:
-            pool_shape = relu2.get_shape().as_list()
-            reshape = tf.reshape(relu2, [pool_shape[0], pool_shape[1] * pool_shape[2] * pool_shape[3]])
-            fc1 = tf.nn.relu(tf.matmul(reshape, self.W_fc1) + self.b_fc1)
+            pool_shape = pool2.get_shape().as_list()
+            reshape = tf.reshape(pool2, [pool_shape[0], pool_shape[1] * pool_shape[2] * pool_shape[3]])
+            #fc1 = tf.nn.relu(tf.matmul(reshape, self.W_fc1) + self.b_fc1)
+            fc1 = tf.nn.tanh(tf.matmul(reshape, self.W_fc1) + self.b_fc1)
 
         #if train:
             #fc1 = tf.nn.dropout(fc1, 0.5, seed=self.seed)

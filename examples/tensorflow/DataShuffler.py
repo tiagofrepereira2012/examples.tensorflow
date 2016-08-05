@@ -130,9 +130,9 @@ class DataShuffler(object):
         for i in range(total_data):
             data[i, :, :, :], data_p[i, :, :, :] = get_genuine_or_not(target_data, target_labels, genuine=genuine)
             if zero_one_labels:
-                labels_siamese[i] = genuine
+                labels_siamese[i] = not genuine
             else:
-                labels_siamese[i] = 1 if genuine else -1
+                labels_siamese[i] = -1 if genuine else +1
             genuine = not genuine
 
         return data, data_p, labels_siamese

@@ -8,7 +8,7 @@
 Simple script that trains MNIST with LENET using Tensor flow
 
 Usage:
-  train_mnist.py [--batch-size=<arg> --iterations=<arg> --validation-interval=<arg> --use-gpu]
+  train_mnist.py <log-name> [--batch-size=<arg> --iterations=<arg> --validation-interval=<arg> --use-gpu --andre-loss]
   train_mnist.py -h | --help
 Options:
   -h --help     Show this screen.
@@ -71,17 +71,61 @@ def compute_contrastive_loss(left_feature, right_feature, label, margin, is_targ
         one = tf.constant(1.0)
 
         d = compute_euclidean_distance(left_feature, right_feature)
+        #first_part = tf.mul(one - label, tf.square(d))  # (Y-1)*(d^2)
+        #first_part = tf.mul(label, tf.square(d))  # (Y-1)*(d^2)
+        between_class = tf.exp(tf.mul(one-label, tf.square(d)))  # (1-Y)*(d^2)
+        max_part = tf.square(tf.maximum(margin-d, 0))
+
+        within_class = tf.mul(label, max_part)  # (Y) * max((margin - d)^2, 0)
+        #second_part = tf.mul(one-label, max_part)  # (Y) * max((margin - d)^2, 0)
+
+        loss = 0.5 * tf.reduce_mean(within_class + between_class)
+
+        return loss, tf.reduce_mean(within_class), tf.reduce_mean(between_class)
+
+
+def compute_contrastive_loss_andre(left_feature, right_feature, label, margin, is_target_set_train=True):
+
+    """
+    Compute the contrastive loss as in
+
+    https://gitlab.idiap.ch/biometric/xfacereclib.cnn/blob/master/xfacereclib/cnn/scripts/experiment.py#L156
+
+
+    With Y = [-1 +1] --> [POSITIVE_PAIR NEGATIVE_PAIR]
+
+    L = log( m + exp( Y * d^2)) / N
+
+
+
+    **Parameters**
+     left_feature: First element of the pair
+     right_feature: Second element of the pair
+     label: Label of the pair (0 or 1)
+     margin: Contrastive margin
+
+    **Returns**
+     Return the loss operation
+
+    """
+
+    with tf.name_scope("contrastive_loss_andre"):
+        label = tf.to_float(label)
+        d = compute_euclidean_distance(left_feature, right_feature)
+
+        loss = tf.log(tf.exp(tf.mul(label, d)))
+        loss = tf.reduce_mean(loss)
+
+        # Within class part
+        genuine_factor = tf.mul(label-1, 0.5)
+        within_class = tf.reduce_mean(tf.log(tf.exp(tf.mul(genuine_factor, d))))
+
+        # Between class part
+        impostor_factor = tf.mul(label + 1, 0.5)
+        between_class = tf.reduce_mean(tf.log(tf.exp(tf.mul(impostor_factor, d))))
+
         # first_part = tf.mul(one - label, tf.square(d))  # (Y-1)*(d^2)
-        first_part = tf.mul(one-label, tf.square(d))  # (1-Y)*(d^2)
-
-        max_part = tf.square(tf.maximum(d - margin, 0))
-        second_part = tf.mul(label, max_part)  # (Y) * max((margin - d)^2, 0)
-
-        loss = 0.5 * tf.reduce_mean(first_part + second_part)
-
-        return loss, tf.reduce_mean(first_part), tf.reduce_mean(second_part)
-
-
+        return loss, between_class, within_class
 
 
 def main():
@@ -93,9 +137,10 @@ def main():
     ITERATIONS = int(args['--iterations'])
     VALIDATION_TEST = int(args['--validation-interval'])
     perc_train = 0.9
-    CONTRASTIVE_MARGIN = 0.1
+    CONTRASTIVE_MARGIN = 2.0
     USE_GPU = args['--use-gpu']
-
+    ANDRE_LOSS = args['--andre-loss']
+    LOG_NAME = args['<log-name>']
 
     data, labels = util.load_mnist(data_dir="./src/bob.db.mnist/bob/db/mnist/")
     data_shuffler = DataShuffler(data, labels, scale=True)
@@ -111,10 +156,21 @@ def main():
     # Creating the graphs for training
     lenet_train_left = lenet_architecture.create_lenet(train_left_data)
     lenet_train_right = lenet_architecture.create_lenet(train_right_data)
-    #lenet_validation = lenet_architecture.create_lenet(validation_data, train=False)
+
+    # Siamease place holders - Validation
+    validation_data = tf.placeholder(tf.float32, shape=(data_shuffler.validation_data.shape[0], 28, 28, 1), name="validation")
+    labels_data_validation = tf.placeholder(tf.int32, shape=BATCH_SIZE_TEST)
+
+    # Creating the graphs for validation
+    lenet_validation = lenet_architecture.create_lenet(validation_data, train=False)
+
+    if ANDRE_LOSS:
+        loss, between_class, within_class = compute_contrastive_loss_andre(lenet_train_left, lenet_train_right, labels_data,                                                            CONTRASTIVE_MARGIN)
+    else:
+        # Regular contrastive loss
+        loss, between_class, within_class = compute_contrastive_loss(lenet_train_left, lenet_train_right, labels_data, CONTRASTIVE_MARGIN)
 
 
-    loss, between_class, within_class = compute_contrastive_loss(lenet_train_left, lenet_train_right, labels_data, CONTRASTIVE_MARGIN)
     distances = compute_euclidean_distance(lenet_train_left, lenet_train_right)
 
 
@@ -125,7 +181,7 @@ def main():
     # Defining training parameters
     batch = tf.Variable(0)
     learning_rate = tf.train.exponential_decay(
-        0.0001, # Learning rate
+        0.00001, # Learning rate
         batch * BATCH_SIZE,
         data_shuffler.train_data.shape[0],
         0.95 # Decay step
@@ -134,15 +190,15 @@ def main():
     #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
     optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=0.99, use_locking=False, name='Momentum').minimize(loss, global_step=batch)
 
+    pp = PdfPages("groups.pdf")
     # Training
-
     with tf.Session() as session:
 
         #Trying to write things on tensor board
-        train_writer = tf.train.SummaryWriter('./logs_tensorboard/siamese/train',
+        train_writer = tf.train.SummaryWriter(LOG_NAME + '/train',
                                               session.graph)
 
-        test_writer = tf.train.SummaryWriter('./logs_tensorboard/siamese/test',
+        test_writer = tf.train.SummaryWriter(LOG_NAME + '/test',
                                               session.graph)
 
         tf.scalar_summary('loss', loss)
@@ -153,9 +209,9 @@ def main():
 
         tf.initialize_all_variables().run()
 
-        for step in range(ITERATIONS):
+        for step in range(ITERATIONS+1):
 
-            batch_left, batch_right, labels = data_shuffler.get_pair(BATCH_SIZE)
+            batch_left, batch_right, labels = data_shuffler.get_pair(BATCH_SIZE, zero_one_labels=not ANDRE_LOSS)
 
             feed_dict = {train_left_data: batch_left,
                          train_right_data: batch_right,
@@ -166,8 +222,10 @@ def main():
 
             if step % VALIDATION_TEST == 0:
 
+                # Siamese validation
                 batch_left, batch_right, labels = data_shuffler.get_pair(n_pair=BATCH_SIZE_TEST,
-                                                                         is_target_set_train=False)
+                                                                         is_target_set_train=False,
+                                                                         zero_one_labels=not ANDRE_LOSS)
                 feed_dict = {train_left_data: batch_left,
                              train_right_data: batch_right,
                              labels_data: labels}
@@ -175,17 +233,45 @@ def main():
                 d, lv, summary = session.run([distances, loss, merged], feed_dict=feed_dict)
                 test_writer.add_summary(summary, step)
 
-                positive_scores = d[numpy.where(labels == 1)[0]].astype("float")
-                negative_scores = d[numpy.where(labels == 0)[0]].astype("float")
 
-                threshold = bob.measure.eer_threshold(negative_scores, positive_scores)
-                far, frr = bob.measure.farfrr(negative_scores, positive_scores, threshold)
-                eer = ((far + frr) / 2.) * 100.
-                print("EER = {0}".format(eer))
-                print("Loss Validation {0}".format(lv))
+                ###################################
+                # Siamese as a feature extractor
+                ###################################
+                batch_train_data, batch_train_labels = data_shuffler.get_batch(
+                    data_shuffler.validation_data.shape[0],
+                    train_dataset=True)
+
+                features_train = session.run(lenet_validation,
+                                             feed_dict={validation_data: batch_train_data[:]})
+
+                batch_validation_data, batch_validation_labels = data_shuffler.get_batch(
+                    data_shuffler.validation_data.shape[0],
+                    train_dataset=False)
+
+                features_validation = session.run(lenet_validation,
+                                                  feed_dict={validation_data: batch_validation_data[:]})
+
+                eer = util.compute_eer(features_train, batch_train_labels, features_validation, batch_validation_labels,
+                                       10)
+
+                print("Step {0}. Loss Validation = {1}, EER = {2}".
+                      format(step, lv, eer))
+
+                fig = util.plot_embedding_lda(features_validation, batch_validation_labels)
+                pp.savefig(fig)
+
+                #if ANDRE_LOSS:
+                #    positive_scores = d[numpy.where(labels == -1)[0]].astype("float")
+                #    negative_scores = d[numpy.where(labels == 1)[0]].astype("float")
+                #else:
+                #    positive_scores = d[numpy.where(labels == 1)[0]].astype("float")
+                #    negative_scores = d[numpy.where(labels == 0)[0]].astype("float")
+
+                #threshold = bob.measure.eer_threshold(negative_scores, positive_scores)
+                #far, frr = bob.measure.farfrr(negative_scores, positive_scores, threshold)
+                #eer = ((far + frr) / 2.) * 100.
 
         print("End !!")
         train_writer.close()
         test_writer.close()
-
-
+        pp.close()
