@@ -137,7 +137,7 @@ def main():
     ITERATIONS = int(args['--iterations'])
     VALIDATION_TEST = int(args['--validation-interval'])
     perc_train = 0.9
-    CONTRASTIVE_MARGIN = 2.0
+    CONTRASTIVE_MARGIN = 1.0
     USE_GPU = args['--use-gpu']
     ANDRE_LOSS = args['--andre-loss']
     LOG_NAME = args['<log-name>']
@@ -181,14 +181,14 @@ def main():
     # Defining training parameters
     batch = tf.Variable(0)
     learning_rate = tf.train.exponential_decay(
-        0.00001, # Learning rate
+        0.0001, # Learning rate
         batch * BATCH_SIZE,
         data_shuffler.train_data.shape[0],
         0.95 # Decay step
     )
 
     #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=batch)
-    optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=0.99, use_locking=False, name='Momentum').minimize(loss, global_step=batch)
+    optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=0.95, use_locking=False, name='Momentum').minimize(loss, global_step=batch)
 
     pp = PdfPages("groups.pdf")
     # Training

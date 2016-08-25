@@ -98,8 +98,9 @@ class Lenet(object):
 
         with tf.name_scope('tanh_2') as scope:
             # pool2 = create_max_pool(relu2)
-            tanh_2 = create_relu(conv2, self.b_conv2)
+            #tanh_2 = create_relu(conv2, self.b_conv2)
             # pool2 = create_max_pool(conv2)
+            tanh_2 = create_tanh(conv2, self.b_conv2)
 
         # Pooling
         with tf.name_scope('pool_2') as scope:
